@@ -40,6 +40,12 @@ mkdir -p "$BACKUP_DIR/repos" "$BACKUP_DIR/wikis" "$BACKUP_DIR/gists"
 
 mirror() {
     local url="$1" dest="$2" label="$3"
+    local lock="${dest}.lock"
+
+    # Interrupted previous clone - clean up partial data
+    if [ -f "$lock" ] && [ -d "$dest" ]; then
+        rm -rf "$dest"
+    fi
 
     if [ -d "$dest" ]; then
         if git -C "$dest" remote update --prune &>/dev/null; then
@@ -48,9 +54,13 @@ mirror() {
             echo -e "\033[1;31m[-]\033[0m Failed: $label"
         fi
     else
+        touch "$lock"
         if git clone --mirror "$url" "$dest" &>/dev/null; then
+            rm -f "$lock"
             echo -e "\033[1;32m[+]\033[0m Cloned $label"
         else
+            rm -f "$lock"
+            [[ "$label" == *"(wiki)"* ]] && return 0
             echo -e "\033[1;31m[-]\033[0m Failed: $label"
         fi
     fi
@@ -59,13 +69,22 @@ export -f mirror
 
 # --- Repositories ---
 log "Fetching repository list..."
-REPO_LIST=$(gh repo list "$USERNAME" --limit 9999 --json name,url,hasWikiEnabled \
-    --jq '.[] | "\(.name)\t\(.url)\t\(.hasWikiEnabled)"')
+REPO_LIST=$(gh repo list "$USERNAME" --limit 9999 --json name,url,hasWikiEnabled,isPrivate,description,isFork \
+    --jq '.[] | "\(.name)\t\(.url)\t\(.hasWikiEnabled)\t\(.isPrivate)\t\(.description // "")\t\(.isFork)"')
 REPO_COUNT=$(echo "$REPO_LIST" | wc -l)
 log "Found $REPO_COUNT repositories"
 echo
 
-echo "$REPO_LIST" | while IFS=$'\t' read -r name url wiki; do
+# Save repo metadata manifest
+MANIFEST="$BACKUP_DIR/manifest.json"
+echo "$REPO_LIST" | while IFS=$'\t' read -r name url wiki private desc fork; do
+    printf '{"name":"%s","url":"%s","private":%s,"fork":%s,"description":"%s"}\n' \
+        "$name" "$url" "$private" "$fork" "$(echo "$desc" | sed 's/"/\\"/g')"
+done | jq -s '.' > "$MANIFEST"
+log "Saved manifest to $MANIFEST"
+echo
+
+echo "$REPO_LIST" | while IFS=$'\t' read -r name url wiki private desc fork; do
     echo "$url|$BACKUP_DIR/repos/${name}.git|$name"
     if [ "$wiki" = "true" ]; then
         echo "${url}.wiki|$BACKUP_DIR/wikis/${name}.wiki.git|$name (wiki)"

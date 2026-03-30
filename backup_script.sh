@@ -18,6 +18,7 @@ log()  { echo -e "\033[1;34m[*]\033[0m $1"; }
 ok()   { echo -e "\033[1;32m[+]\033[0m $1"; }
 warn() { echo -e "\033[1;33m[~]\033[0m $1"; }
 fail() { echo -e "\033[1;31m[-]\033[0m $1"; }
+export -f log ok warn fail
 
 if ! command -v gh &>/dev/null; then
     fail "gh CLI not found. Install it: https://cli.github.com"
@@ -49,19 +50,19 @@ mirror() {
 
     if [ -d "$dest" ]; then
         if git -C "$dest" remote update --prune &>/dev/null; then
-            echo -e "\033[1;32m[+]\033[0m Updated $label"
+            ok "Updated $label"
         else
-            echo -e "\033[1;31m[-]\033[0m Failed: $label"
+            fail "Failed: $label"
         fi
     else
         touch "$lock"
         if git clone --mirror "$url" "$dest" &>/dev/null; then
             rm -f "$lock"
-            echo -e "\033[1;32m[+]\033[0m Cloned $label"
+            ok "Cloned $label"
         else
             rm -f "$lock"
             [[ "$label" == *"(wiki)"* ]] && return 0
-            echo -e "\033[1;31m[-]\033[0m Failed: $label"
+            fail "Failed: $label"
         fi
     fi
 }

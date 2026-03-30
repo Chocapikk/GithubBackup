@@ -78,10 +78,8 @@ echo
 
 # Save repo metadata manifest
 MANIFEST="$BACKUP_DIR/manifest.json"
-echo "$REPO_LIST" | while IFS=$'\t' read -r name url wiki private desc fork; do
-    printf '{"name":"%s","url":"%s","private":%s,"fork":%s,"description":"%s"}\n' \
-        "$name" "$url" "$private" "$fork" "$(echo "$desc" | sed 's/"/\\"/g')"
-done | jq -s '.' > "$MANIFEST"
+gh repo list "$USERNAME" --limit 9999 --json name,url,isPrivate,isFork,description \
+    > "$MANIFEST"
 log "Saved manifest to $MANIFEST"
 echo
 
